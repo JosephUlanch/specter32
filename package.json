@@ -1,0 +1,1 @@
+{"name":"specter32","version":"1.0.0","private":true,"scripts":{"test:web":"node tests/web_test.cjs"},"devDependencies":{"playwright":"1.63.0"}}

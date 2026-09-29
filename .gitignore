@@ -1,0 +1,8 @@
+.pio/
+.venv/
+__pycache__/
+include/web_asset.h
+*.pcap
+*.pcapng
+node_modules/
+test-results/
