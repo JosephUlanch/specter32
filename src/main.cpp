@@ -304,6 +304,12 @@ void setup() {
         server.sendHeader("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'");
         server.send_P(200, "text/html", reinterpret_cast<const char*>(WEB_ASSET), sizeof(WEB_ASSET));
     });
+    server.on("/handshake.js", HTTP_GET, [] {
+        server.sendHeader("Content-Encoding", "gzip");
+        server.sendHeader("Cache-Control", "no-cache");
+        server.sendHeader("X-Content-Type-Options", "nosniff");
+        server.send_P(200, "application/javascript", reinterpret_cast<const char*>(HANDSHAKE_ASSET), sizeof(HANDSHAKE_ASSET));
+    });
     server.on("/api/state", HTTP_GET, state);
     server.on("/api/scan", HTTP_POST, requestScan);
     server.on("/api/capture", HTTP_POST, requestCapture);

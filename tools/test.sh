@@ -14,3 +14,6 @@ html = Path('web/index.html').read_text()
 Path(sys.argv[1]).write_text(html.split('<script>')[1].split('</script>')[0])
 PY
 node --check "$work/dashboard.js"
+
+node --check web/handshake.js
+node tests/handshake_test.cjs

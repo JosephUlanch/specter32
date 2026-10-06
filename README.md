@@ -9,7 +9,7 @@ A pocket-sized passive Wi-Fi field console for **ESP-WROOM-32 / ESP-32S developm
 - Passive discovery of nearby 2.4 GHz networks: SSID, BSSID, signal strength, security mode and channel. Hidden networks appear without a name.
 - Channel map showing network counts, and a timed listener for a selected BSSID.
 - Saves that network's beacons/probe responses and unencrypted EAPOL frames to standard `.pcap` files. It waits for naturally occurring authentication traffic.
-- Shows observed M1–M4 message counts, EAPOL frames, queue drops and capture size. Counts include retransmissions and multiple clients; **they do not certify a complete or usable handshake**.
+- Shows per-capture handshake assessments alongside M1–M4 counts, EAPOL frames, queue drops and capture size. The assessment reads the actual PCAP; aggregate message counts alone are never treated as proof.
 - Downloads and deletes captures from your phone. Everything, including the web app, lives on the ESP32. No CDN, internet, SD card or additional wiring required.
 
 Use on networks you own or have permission to inspect. This is a passive capture tool; it does not send deauthentication frames, inject packets, or crack passwords.
@@ -65,6 +65,25 @@ pio device monitor -b 115200
 
 The `esp32dev` target uses the classic ESP32, a 2 MiB application partition and roughly 1.94 MiB of LittleFS. No PSRAM is required. ESP32-S2/S3/C3 boards need a different configuration and are not the target of this build. PlatformIO automatically compresses and embeds `web/index.html` before building.
 
+## Handshake labels
+
+The dashboard automatically reads each saved PCAP **locally in your browser**, one file at a time. This also checks captures saved by older firmware and recovered captures without summaries. No capture is uploaded to a cloud service. Reloading the dashboard reruns the assessment; results stay in browser memory.
+
+| Label | Meaning |
+| --- | --- |
+| **Complete handshake** | A usable WPA/WPA2-Personal pair plus matching M1–M4 from the same AP/client exchange. |
+| **Usable handshake pair** | Matching M1+M2 or M2+M3 with both nonces, a nonzero client MIC, supported PSK authentication and a network name in the PCAP. Also recognizes M1+M4/M3+M4 when M4 retains SNonce. |
+| **Incomplete handshake** | EAPOL was captured, but no supported matching pair was found. This is conservative: desktop tools may handle additional cases. |
+| **No handshake** | No EAPOL authentication frames were found. |
+| **Pair found · SSID needed** | Matching password-checking material exists, but the PCAP lacks one unambiguous SSID needed for standalone conversion. |
+| **Pair found · needs review** | The authentication or EAPOL format is unsupported or uncertain, including SAE/enterprise exchanges. |
+| **Capture needs review** | Truncated, unsupported or malformed PCAP, or analysis resource limit reached. A desktop tool may recover earlier packets. |
+| **Not checked · retrying** | The file could not be downloaded for checking; reconnect and the dashboard retries. |
+
+These are **structural assessments**, not cryptographic verification. Without the network key, the dashboard cannot validate the MIC, distinguish all rejected password attempts, or guarantee that a password can be recovered. A usable PCAP still needs conversion for Hashcat. Full four-message capture is distinct from having enough material for password checking.
+
+Matching requires the same AP/client, key descriptor/version, a maximum five-second gap, exact replay relationships (M1=M2, M3=M2+1, M3=M4), consistent AP nonce across M1/M3 and client nonce when M4 carries one. The analyzer checks the client's RSN/WPA AKM selection when present; otherwise it requires unambiguous PSK-only beacon information. WPA3 transition networks are marked usable only when the captured client exchange is identified as supported PSK. FT modes and other unsupported suites require review. Large replay counters retain full 64-bit precision. Resource limits: 256 KiB PCAP and 200,000 candidate comparisons.
+
 ## Storage and implementation
 
 - Up to six saved sessions, capped at 256 KiB each. Full storage rejects a new capture; it never silently deletes old captures. Download and delete a session to make room.
@@ -84,10 +103,12 @@ npm run test:web
 pio run
 ```
 
-The host suite requires GCC, Python and Node. It tests M1–M4 classification, QoS/HT headers, every truncation of sample frames, malformed/filtered inputs, 100,000 randomized parser inputs under AddressSanitizer/UBSan and independent PCAP framing. Browser tests exercise mobile layout, untrusted SSIDs, selection, slow scan requests, downloads, deletion, capture state and page reload. Browser tests use **simulated device data**, including the screenshot above.
+The host suite requires GCC, Python and Node. It tests M1–M4 classification, QoS/HT headers, every truncation of sample frames, malformed/filtered inputs, 100,000 randomized parser inputs under AddressSanitizer/UBSan and independent PCAP framing. Analyzer tests cover complete and partial exchanges, cross-client/session false positives, replay/nonces/MICs, PSK versus SAE/enterprise, malformed files, every truncation and 5,000 fuzz inputs. Browser tests exercise the actual analyzer on synthetic PCAP downloads, mobile layout, untrusted SSIDs, selection, slow scan requests, downloads, deletion, capture state and page reload. Browser tests use **simulated device data**, including the screenshot above.
 
-**Validated here:** successful ESP32 firmware build, host sanitizer/PCAP tests, and Chromium dashboard tests. **Not yet validated on physical hardware:** radio reception, hotspot recovery, flash endurance and actual phone Wi-Fi reconnection. No ESP32 was attached during development.
+**Validated here:** successful ESP32 firmware build, host sanitizer/PCAP tests, and Chromium dashboard tests. The handshake analyzer also recognized the complete exchange in Wireshark’s public `wpa-Induction.pcap` sample after stripping radiotap/FCS into SPECTER32’s link type; `hcxpcapngtool` 7.1.2 independently extracted a usable pair from that normalized sample and the synthetic complete fixture. **Not yet validated on physical hardware:** radio reception, hotspot recovery, flash endurance and actual phone Wi-Fi reconnection. The later dashboard updates have been flashed to the connected ESP32 and boot-checked, but capture/reception testing remains separate.
 
 Hardware acceptance: flash a spare board; verify scan results against your AP; select that AP, reconnect an owned client during capture, verify EAPOL frames in Wireshark, check hotspot recovery, power-cycle to verify persistence, and exercise download/delete and full-storage behavior. Avoid disconnecting power during flash writes.
+
+Handshake format reference: [Hashcat EAPOL message-pair documentation](https://hashcat.net/wiki/doku.php?id=cracking_wpawpa2#working_with_hash_files).
 
 Reference: [Espressif Wi-Fi API and packet metadata](https://docs.espressif.com/projects/esp-idf/en/v4.4/esp32/api-reference/network/esp_wifi.html), [sniffer mode and callback guidance](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-guides/wifi-driver/wifi-modes.html).
