@@ -45,7 +45,9 @@ For SPECTER32 application updates that preserve credentials and captures, use Pl
 3. Open **http://192.168.4.1** in your normal browser. If a captive-portal mini-browser opens, use Safari/Chrome instead for reliable downloads.
 4. Tap **Scan airspace**, select your network, choose a duration, and tap **Start listening**.
 5. While the board listens, reconnect another client you control to that network to generate authentication traffic. Keep the ESP32 near both the AP and client.
-6. When the countdown finishes, rejoin the SPECTER hotspot and return to the dashboard. Tap **↓ PCAP** in the capture vault. Keep your phone on this Wi-Fi even though it has no internet.
+6. When the countdown finishes, rejoin the SPECTER hotspot and return to the dashboard. Tap **↓ PCAP** in the capture vault, then **Download** if Safari asks. Find the file in the Files app under Downloads (On My iPhone or iCloud Drive, depending on Safari settings). If a preview appears, return to the dashboard and touch and hold **↓ PCAP**, then choose **Download Linked File**. Use the full Safari app, not the Wi-Fi sign-in window. Keep your phone on this Wi-Fi even though it has no internet.
+
+Downloads use a `.pcap` URL, a binary attachment response and an explicit filename. The file is already PCAP; do not rename it to `.pcapng` (that is a different format). Viewing binary packets as text produces random-looking characters and does not itself indicate a corrupt capture.
 
 Open the file in Wireshark, with the display filter `eapol`, to inspect the exchange. PCAP timestamps are **relative to the capture start**, not wall-clock dates. Records use link type 105 (raw IEEE 802.11), little-endian PCAP headers and no FCS/radiotap. There is no per-packet RSSI/channel metadata; the capture summary identifies the fixed channel.
 

@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <WebServer.h>
+#include <uri/UriBraces.h>
 #include <DNSServer.h>
 #include <LittleFS.h>
 #include <Preferences.h>
@@ -266,6 +267,18 @@ void state() {
     }
     s += "]}"; json(200, s);
 }
+void downloadCapture(const String& id) {
+    if (pending) { error(409, "Capture is starting."); return; }
+    if (!validId(id)) { error(400, "Invalid capture ID."); return; }
+    File f = LittleFS.open("/" + id + ".pcap", "r");
+    if (!f) { error(404, "Capture not found."); return; }
+    const String filename = "specter-" + id + ".pcap";
+    server.sendHeader("Content-Disposition", "attachment; filename=\"" + filename + "\"; filename*=UTF-8''" + filename);
+    server.sendHeader("Cache-Control", "no-store");
+    server.sendHeader("X-Content-Type-Options", "nosniff");
+    // Generic binary attachment: don't invite browsers to preview packet bytes.
+    server.streamFile(f, "application/octet-stream");
+}
 void setup() {
     Serial.begin(115200);
     Preferences prefs; prefs.begin("specter32", false);
@@ -302,14 +315,12 @@ void setup() {
         LittleFS.remove("/" + id + ".json"); json(200, "{\"ok\":true}");
     });
     server.on("/api/download", HTTP_GET, [] {
-        if (pending) { error(409, "Capture is starting."); return; }
-        String id = server.arg("id");
-        if (!validId(id)) { error(400, "Invalid capture ID."); return; }
-        File f = LittleFS.open("/" + id + ".pcap", "r");
-        if (!f) { error(404, "Capture not found."); return; }
-        server.sendHeader("Content-Disposition", "attachment; filename=\"specter-" + id + ".pcap\"");
-        server.sendHeader("Cache-Control", "no-store");
-        server.streamFile(f, "application/vnd.tcpdump.pcap");
+        downloadCapture(server.arg("id"));
+    });
+    server.on(UriBraces("/captures/{}"), HTTP_GET, [] {
+        String filename = server.pathArg(0);
+        if (!filename.endsWith(".pcap")) { error(400, "Expected a .pcap file."); return; }
+        downloadCapture(filename.substring(0, filename.length() - 5));
     });
     server.onNotFound([] { server.sendHeader("Location", "http://192.168.4.1/"); server.send(302, "text/plain", "Open the dashboard"); });
     startHotspot();
